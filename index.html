@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>일정 관리 앱</title>
+<style>
+:root{--bg:#f5f6f8;--card:#ffffff;--text:#111;--accent:#4f46e5;--sat:#3b82f6;--sun:#ef4444}
+body.dark{--bg:#0f172a;--card:#111827;--text:#e5e7eb}
+body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
+header{display:flex;gap:8px;padding:12px;background:var(--card);position:sticky;top:0}
+button{border:none;padding:8px 12px;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+.container{padding:12px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.day{background:var(--card);min-height:110px;border-radius:12px;padding:6px;display:flex;flex-direction:column;transition:0.3s;box-shadow:0 1px 2px rgba(0,0,0,0.05);}
+.day h4{margin:0 0 4px;font-size:12px}
+.day.sat h4{color:var(--sat)}
+.day.sun h4{color:var(--sun)}
+.event{font-size:12px;padding:2px 4px;border-radius:6px;margin-bottom:2px;display:flex;justify-content:space-between;cursor:grab}
+.panel{margin-top:12px;background:var(--card);padding:10px;border-radius:12px;display:flex;flex-wrap:wrap;gap:6px}
+input,select{padding:6px;border-radius:8px;border:1px solid #ccc}
+.category{padding:4px 8px;border-radius:999px;font-size:12px;display:flex;gap:4px;align-items:center;color:#fff}
+.day.active{outline:2px solid var(--accent)}
+
+body.dark .day {
+  border: 1px solid #374151; /* 다크모드 경계 */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5); /* 그림자 효과 */
+  background: #1e293b; /* 카드 배경 조금 밝게 */
+  transition:0.3s;
+}
+</style>
+</head>
+<body>
+<header>
+<button onclick="prev()">◀</button>
+<button onclick="next()">▶</button>
+<button onclick="toggleView()">주간/월간</button>
+<button onclick="toggleDark()">다크모드</button>
+<button onclick="backup()">백업</button>
+<button onclick="restore()">불러오기</button>
+</header>
+<div class="container">
+<h3 id="title"></h3>
+<div id="grid" class="grid"></div>
+
+<div class="panel">
+<input type="date" id="date" />
+<input type="text" id="text" placeholder="일정" />
+<select id="category"></select>
+<button onclick="addEvent()">추가</button>
+</div>
+
+<div class="panel">
+<input type="text" id="newCat" placeholder="카테고리" />
+<input type="color" id="catColor" value="#6366f1" />
+<button onclick="addCategory()">카테고리 추가</button>
+<div id="catList" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+</div>
+</div>
+
+<script>
+let current=new Date();
+let selectedDate=new Date();
+let view="month";
+let store=JSON.parse(localStorage.getItem("scheduleStore")||"{}");
+let categories=JSON.parse(localStorage.getItem("scheduleCats")||"[{\"name\":\"기본\",\"color\":\"#6366f1\"}]");
+let dragData=null;
+
+function save(){
+ localStorage.setItem("scheduleStore",JSON.stringify(store));
+ localStorage.setItem("scheduleCats",JSON.stringify(categories));
+}
+
+function formatLocal(d){
+ const y=d.getFullYear();
+ const m=String(d.getMonth()+1).padStart(2,'0');
+ const day=String(d.getDate()).padStart(2,'0');
+ return `${y}-${m}-${day}`;
+}
+
+function render(){
+ document.getElementById("title").textContent=view==="month"?
+ `${current.getFullYear()}년 ${current.getMonth()+1}월`:
+ `${current.toDateString()}`;
+
+ date.value=formatLocal(selectedDate);
+
+ const grid=document.getElementById("grid");
+ grid.innerHTML="";
+
+ let start=new Date(current);
+ if(view==="month") start=new Date(current.getFullYear(),current.getMonth(),1);
+ else start.setDate(current.getDate()-current.getDay());
+
+ let days=view==="month"?42:7;
+ for(let i=0;i<days;i++){
+  let d=new Date(start); d.setDate(start.getDate()+i);
+  const key=formatLocal(d);
+  const dayOfWeek=d.getDay();
+
+  const div=document.createElement("div");
+  div.className="day"+(key===formatLocal(selectedDate)?" active":"")+
+   (dayOfWeek===6?" sat":"")+
+   (dayOfWeek===0?" sun":"");
+
+  div.dataset.date=key;
+  div.onclick=()=>{selectedDate=new Date(d);render();};
+  div.ondragover=e=>e.preventDefault();
+  div.ondrop=e=>dropEvent(key);
+  div.innerHTML=`<h4>${d.getDate()}</h4>`;
+
+  (store[key]||[]).forEach((e,idx)=>{
+    const cat=categories.find(c=>c.name===e.category);
+    const ev=document.createElement("div");
+    ev.className="event";
+    ev.draggable=true;
+    ev.style.background=cat?.color+"33";
+    ev.innerHTML=`<span>[${e.category}] ${e.text}</span><span onclick="delEvent('${key}',${idx})">✕</span>`;
+    ev.ondragstart=()=>dragData={from:key,index:idx};
+    div.appendChild(ev);
+  });
+  grid.appendChild(div);
+ }
+ renderCats();
+ save();
+}
+
+function addEvent(){
+ const d=date.value; const t=text.value; const c=category.value;
+ if(!d||!t) return;
+ if(!store[d]) store[d]=[];
+ store[d].push({text:t,category:c});
+ render();
+}
+
+function delEvent(date,i){store[date].splice(i,1);render();}
+
+function dropEvent(date){
+ if(!dragData) return;
+ const item=store[dragData.from][dragData.index];
+ store[dragData.from].splice(dragData.index,1);
+ if(!store[date]) store[date]=[];
+ store[date].push(item);
+ dragData=null;
+ render();
+}
+
+function addCategory(){
+ const name=newCat.value.trim();
+ const color=catColor.value;
+ if(!name) return;
+ categories.push({name,color});
+ renderCats(); save();
+}
+
+function delCat(i){categories.splice(i,1);renderCats();save();}
+
+function renderCats(){
+ category.innerHTML=""; catList.innerHTML="";
+ categories.forEach((c,i)=>{
+  const o=document.createElement("option"); o.textContent=c.name; category.appendChild(o);
+  const chip=document.createElement("div"); chip.className="category";
+  chip.style.background=c.color;
+  chip.innerHTML=`${c.name}<span onclick="delCat(${i})">✕</span>`;
+  catList.appendChild(chip);
+ });
+}
+
+function prev(){view==="month"?current.setMonth(current.getMonth()-1):current.setDate(current.getDate()-7);render();}
+function next(){view==="month"?current.setMonth(current.getMonth()+1):current.setDate(current.getDate()+7);render();}
+function toggleView(){view=view==="month"?"week":"month";render();}
+function toggleDark(){document.body.classList.toggle("dark");}
+
+function backup(){
+ const blob=new Blob([JSON.stringify({store,categories})],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="schedule-backup.json"; a.click();
+}
+
+function restore(){
+ const input=document.createElement("input"); input.type="file";
+ input.onchange=e=>{
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const obj=JSON.parse(reader.result);
+    store=obj.store||{}; categories=obj.categories||[]; render();
+  };
+  reader.readAsText(e.target.files[0]);
+ };
+ input.click();
+}
+
+render();
+</script>
+</body>
+</html>
