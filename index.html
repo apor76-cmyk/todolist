@@ -131,7 +131,7 @@ function toggleDark(){document.body.classList.toggle("dark");}
 function backup(){const blob=new Blob([JSON.stringify({store,categories})],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="schedule-backup.json"; a.click();}
 function restore(){const input=document.createElement("input"); input.type="file"; input.onchange=e=>{ const reader=new FileReader(); reader.onload=()=>{ const obj=JSON.parse(reader.result); store=obj.store||{}; categories=obj.categories||[]; render(); }; reader.readAsText(e.target.files[0]); }; input.click();}
 /* ================== GitHub Sync ================== */
-const GITHUB_INFO={ user:"apordata", repo:"scheduledata", path:"schedule_sync.json" };
+const GITHUB_INFO={ user:"apor76-cmyk", repo:"scheduledata", path:"schedule_sync.json" };
 const GH_API=`https://api.github.com/repos/${GITHUB_INFO.user}/${GITHUB_INFO.repo}/contents/${GITHUB_INFO.path}`;
 const GH_RAW=`https://raw.githubusercontent.com/${GITHUB_INFO.user}/${GITHUB_INFO.repo}/main/${GITHUB_INFO.path}`;
 
@@ -178,4 +178,5 @@ render();
 </script>
 </body>
 </html>
+
 
